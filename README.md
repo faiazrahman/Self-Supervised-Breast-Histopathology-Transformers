@@ -2,7 +2,7 @@
 
 _This project was developed by Faiaz Rahman originally for CS 482: Applied Machine Learning under Dr. David van Dijk at Yale University._
 
-# Setup
+## Setup
 
 We recommend using a virtual environment via Conda. We have provided an environment YAML file to rebuild the same virtual environment used in our experiments. We use Python 3.7, PyTorch 1.11.0, and CUDA 11.3.1.
 
@@ -11,7 +11,7 @@ conda env create --file environment.yml
 conda activate ssbh-transformers
 ```
 
-# Data
+## Data
 
 ```
 cd data
