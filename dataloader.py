@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 import pickle
 
-# from PIL import Image
+from PIL import Image
 
 import torch
 import torch.nn as nn
@@ -21,18 +21,20 @@ logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
 DATA_PATH = "./data"
 PL_ASSETS_PATH = "./lightning_logs"
 IMAGE_EXTENSION = ".png"
-PRESAVED_IMAGE_FILENAMES = "image_filenames.pkl"
+PRESAVED_IMAGE_FILEPATHS = "image_filepaths.pkl"
 
 class BreastHistopathologyDataset(Dataset):
 
     def __init__(self, force_reset=False):
         # Get a list of all image files, across all patients
-        image_files = list()
-        presaved_image_names_path = os.path.join(DATA_PATH, PRESAVED_IMAGE_FILENAMES)
-        if os.path.exists(presaved_image_names_path) and not force_reset:
+        image_filepaths = list()
+        presaved_image_filepaths_path = os.path.join(DATA_PATH, PRESAVED_IMAGE_FILEPATHS)
+        if os.path.exists(presaved_image_filepaths_path) and not force_reset:
             # Load from previous run
-            with open(presaved_image_names_path, "rb") as file:
-                image_files = pickle.load(file)
+            logging.info(f"Loading list of image file paths from previous run (stored in {presaved_image_filepaths_path})...")
+            logging.info("  To run from scratch, pass in force_reset=True to BreastHistopathologyDataset()")
+            with open(presaved_image_filepaths_path, "rb") as file:
+                image_filepaths = pickle.load(file)
         else:
             # Get all patient IDs, which are numbers (which we match for via regex)
             # Note that each patient has their own subdirectory in `data/`
@@ -44,22 +46,24 @@ class BreastHistopathologyDataset(Dataset):
             for patient_id in patient_ids:
                 patient_dir = os.path.join(DATA_PATH, patient_id)
                 for root, dirs, files in os.walk(patient_dir):
-                    image_files.extend(files)
+                    curr_filepaths = [os.path.join(root, filename) for filename in files]
+                    image_filepaths.extend(curr_filepaths)
 
             # Save for future runs
-            with open(presaved_image_names_path, "wb") as file:
-                pickle.dump(image_files, file)
+            with open(presaved_image_filepaths_path, "wb") as file:
+                pickle.dump(image_filepaths, file)
 
-        image_labels = [0 for _ in range(len(image_files))]
-        for idx, filename in enumerate(image_files):
+        # Extract the label for each image file
+        image_labels = [0 for _ in range(len(image_filepaths))]
+        for idx, filename in enumerate(image_filepaths):
             # Files are named as <patient_id>_idx..._x..._y..._class<label>.png
             # We extract the label from that filename
             label = int(filename.replace(IMAGE_EXTENSION, "")[-1])
             image_labels[idx] = label
 
         self.dataframe = pd.DataFrame(
-            list(zip(image_files, image_labels)),
-            columns=["image_filename", "label"]
+            list(zip(image_filepaths, image_labels)),
+            columns=["image_filepath", "label"]
         )
 
     def __len__(self):
@@ -67,14 +71,15 @@ class BreastHistopathologyDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        item_id = self.dataframe.loc[idx, "image_filename"]
+        image_filepath = self.dataframe.loc[idx, "image_filepath"]
         label = self.dataframe.loc[idx, "label"]
 
         # FIXME
-        image = None
+        image = Image.open(image_filepath)
+        print(image)
 
         item = {
-            "id": item_id,
+            "image_path": image_filepath,
             "image": image,
             "label": label,
         }

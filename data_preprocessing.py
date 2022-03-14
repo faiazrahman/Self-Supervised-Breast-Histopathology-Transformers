@@ -55,9 +55,11 @@ if __name__ == "__main__":
     logging.info(test_dataset)
 
     # TODO: rm, this is just making sure the subsets are still iterable
-    # train_count = 0
-    # for batch_idx, batch_items in enumerate(train_dataset):
-    #     train_count += 1
+    train_count = 0
+    for batch_idx, batch_items in enumerate(train_dataset):
+        print(batch_items)
+        train_count += 1
+        break
 
     # test_count = 0
     # for batch_idx, batch_items in enumerate(test_dataset):
