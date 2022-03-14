@@ -1,4 +1,4 @@
-name: bh-transformers-v2
+name: ssbh-transformers
 channels:
   - pytorch
   - defaults
