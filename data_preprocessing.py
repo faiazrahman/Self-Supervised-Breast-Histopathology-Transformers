@@ -58,6 +58,7 @@ if __name__ == "__main__":
     train_count = 0
     for batch_idx, batch_items in enumerate(train_dataset):
         print(batch_items)
+        print(batch_items["image"])
         train_count += 1
         break
 

@@ -15,6 +15,7 @@ from PIL import Image
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+import torchvision
 
 logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
@@ -74,9 +75,18 @@ class BreastHistopathologyDataset(Dataset):
         image_filepath = self.dataframe.loc[idx, "image_filepath"]
         label = self.dataframe.loc[idx, "label"]
 
-        # FIXME
-        image = Image.open(image_filepath)
-        print(image)
+        image = Image.open(image_filepath).convert("RGB")
+        image_transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            # All torchvision models expect the same normalization mean and std
+            # https://pytorch.org/docs/stable/torchvision/models.html
+            # TODO: Should we do this for the DINO model too?
+            torchvision.transforms.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225)
+            ),
+        ])
+        image = image_transform(image)
 
         item = {
             "image_path": image_filepath,
