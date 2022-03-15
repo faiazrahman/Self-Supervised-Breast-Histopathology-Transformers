@@ -26,7 +26,10 @@ PRESAVED_IMAGE_FILEPATHS = "image_filepaths.pkl"
 
 class BreastHistopathologyDataset(Dataset):
 
-    def __init__(self, force_reset=False):
+    def __init__(self, force_reset=False, image_dim=30):
+
+        self.image_dim = image_dim
+
         # Get a list of all image files, across all patients
         image_filepaths = list()
         presaved_image_filepaths_path = os.path.join(DATA_PATH, PRESAVED_IMAGE_FILEPATHS)
@@ -77,6 +80,7 @@ class BreastHistopathologyDataset(Dataset):
 
         image = Image.open(image_filepath).convert("RGB")
         image_transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(size=(self.image_dim, self.image_dim)),
             torchvision.transforms.ToTensor(),
             # All torchvision models expect the same normalization mean and std
             # https://pytorch.org/docs/stable/torchvision/models.html

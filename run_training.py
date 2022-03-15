@@ -1,0 +1,106 @@
+import os
+import logging
+import argparse
+
+from tqdm import tqdm
+import yaml
+
+import torch
+from torch.utils.data import DataLoader
+
+import pytorch_lightning as pl
+
+from dataloader import BreastHistopathologyDataset
+from model import ResNetModel, IDCDetectionModel, PrintCallback
+
+# Multiprocessing for dataset batching: NUM_CPUS=24 on Yale Tangra server
+# Set to 0 and comment out torch.multiprocessing line if multiprocessing gives errors
+NUM_CPUS = 0
+# torch.multiprocessing.set_start_method('spawn')
+
+DATA_PATH = "./data"
+BATCH_SIZE = 32
+NUM_CLASSES = 2
+DEFAULT_GPUS = list(range(torch.cuda.device_count()))
+
+logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default="", help="config.yaml file with experiment configuration")
+
+    # We default all hyperparameters to None so that their default values can
+    # be taken from a config file; if the config file is not specified, then we
+    # use the given default values in the `config.get()` calls (see below)
+    # Thus the order of precedence for hyperparameter values is
+    #   passed manually as an arg -> specified in given config file -> default
+    # This allows experiments defined in config files to be easily replicated
+    # while tuning specific parameters via command-line args
+    parser.add_argument("--batch_size", type=int, default=None)
+    parser.add_argument("--learning_rate", type=float, default=None)
+    parser.add_argument("--num_epochs", type=int, default=None)
+    parser.add_argument("--dropout_p", type=float, default=None)
+    parser.add_argument("--gpus", type=str, help="Comma-separated list of ints with no spaces; e.g. \"0\" or \"0,1\"")
+    args = parser.parse_args()
+
+    config = {}
+    if args.config is not "":
+        with open(str(args.config), "r") as yaml_file:
+            config = yaml.load(yaml_file)
+
+    if not args.batch_size: args.batch_size = config.get("batch_size", 32)
+    if not args.learning_rate: args.learning_rate = config.get("learning_rate", 1e-4)
+    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 10)
+    if not args.dropout_p: args.dropout_p = config.get("dropout_p", 0.1)
+    if args.gpus:
+        args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
+    else:
+        args.gpus = config.get("gpus", DEFAULT_GPUS)
+
+    full_dataset = BreastHistopathologyDataset()
+    logging.info("Total dataset size: {}".format(len(full_dataset)))
+    logging.info(full_dataset)
+
+    train_size = int(0.8 * len(full_dataset))
+    test_size = len(full_dataset) - train_size
+    # https://pytorch.org/docs/stable/data.html#torch.utils.data.random_split
+    train_dataset, test_dataset = torch.utils.data.random_split(
+        full_dataset, [train_size, test_size],
+        generator=torch.Generator().manual_seed(6)
+    )
+    logging.info(f"Train dataset size: {len(train_dataset)}")
+    logging.info(train_dataset)
+    logging.info(f"Test dataset size: {len(test_dataset)}")
+    logging.info(test_dataset)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        num_workers=NUM_CPUS,
+    )
+    logging.info(train_loader)
+
+    hparams = {
+        "num_classes": NUM_CLASSES, # TODO args.num_classes
+    }
+
+    model = IDCDetectionModel(hparams)
+
+    trainer = None
+    callbacks = [PrintCallback()]
+    if torch.cuda.is_available():
+        # Use all specified GPUs with data parallel strategy
+        # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
+        trainer = pl.Trainer(
+            # gpus=1, # TODO args.gpus,
+            gpus=list(range(torch.cuda.device_count())), # All available GPUs
+            strategy="dp", # TODO
+            callbacks=callbacks,
+        )
+    else:
+        trainer = pl.Trainer(
+            callbacks=callbacks
+        )
+    logging.info(trainer)
+
+    trainer.fit(model, train_loader)

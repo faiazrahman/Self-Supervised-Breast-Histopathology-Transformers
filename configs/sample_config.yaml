@@ -1,0 +1,7 @@
+batch_size: 32 # (int)
+learning_rate: 1.0e-4 # (float) Note that the mantissa must have a decimal point to be parsed by YAML as a float (and not a str)
+num_epochs: 10 # (int)
+dropout_p: 0.1 # (float)
+gpus: [0, 1] # [0] | [1] | [0, 1] Note that it must be a list of ints
+trained_model_version: 1 # (int)
+trained_model_path: null # (str)

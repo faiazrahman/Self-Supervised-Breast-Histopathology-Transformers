@@ -24,7 +24,15 @@ print("CUDA available:", torch.cuda.is_available())
 
 class SelfSupervisedDinoTransformerModel(nn.Module):
 
-    def __init__(self):
+    def __init__(
+        self,
+        num_classes,
+        loss_fn,
+        image_feature_dim,
+        hidden_dim=512,
+        dropout_p=0.1,
+    ):
+        super(SelfSupervisedDinoTransformerModel, self).__init__()
         pass
 
     def forward(self, image, label):
@@ -44,7 +52,7 @@ class ResNetModel(nn.Module):
         self.image_encoder = torchvision.models.resnet152(pretrained=True)
         # Overwrite last layer to get features (rather than classification)
         self.image_encoder.fc = torch.nn.Linear(
-            in_features=RESNET_OUT_DIM, out_features=self.image_feature_dim)
+            in_features=RESNET_OUT_DIM, out_features=image_feature_dim)
 
         self.fc1 = torch.nn.Linear(in_features=image_feature_dim, out_features=hidden_dim)
         self.fc2 = torch.nn.Linear(in_features=hidden_dim, out_features=num_classes)
@@ -72,13 +80,13 @@ class ConvolutionalNeuralNetModel(nn.Module):
         pass
 
 
-class IDCDetectionModelTrainer(pl.LightningModule):
+class IDCDetectionModel(pl.LightningModule):
 
     # TODO: Can we reuse this trainer for all the models?
     #       Currently only being used for ResNetModel
 
     def __init__(self, hparams=None):
-        super(IDCDetectionModelTrainer, self).__init__()
+        super(IDCDetectionModel, self).__init__()
         if hparams:
             # Cannot reassign self.hparams in pl.LightningModule; must use update()
             # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525
@@ -164,3 +172,13 @@ class IDCDetectionModelTrainer(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         # optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9)
         return
+
+class PrintCallback(Callback):
+    def on_train_start(self, trainer, pl_module):
+        print("Training started...")
+
+    def on_train_end(self, trainer, pl_module):
+        print("Training done...")
+        global losses
+        for loss_val in losses:
+            print(loss_val)
