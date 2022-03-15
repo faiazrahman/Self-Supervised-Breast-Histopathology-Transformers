@@ -36,7 +36,7 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
     ):
         super(SelfSupervisedDinoTransformerModel, self).__init__()
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
+        # self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
         self.dino_model = ViTModel.from_pretrained('facebook/dino-vits16')
 
         self.fc1 = torch.nn.Linear(in_features=dino_embedding_dim, out_features=hidden_dim)
@@ -65,7 +65,7 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
 
     def forward(self, image_pixel_values, label=None):
         dino_embedding = self.dino_model(pixel_values=image_pixel_values)
-        dino_last_hidden_states = dino_embedding.last_hidden_state
+        dino_last_hidden_states = dino_embedding.last_hidden_state#[:,0]
 
         hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
         logits = self.fc2(hidden)
@@ -88,6 +88,7 @@ class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
 
         self.learning_rate = self.hparams.get("learning_rate", LEARNING_RATE)
 
+        self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
         self.model = SelfSupervisedDinoTransformerModel(
             num_classes=self.hparams.get("num_classes", NUM_CLASSES),
             loss_fn=torch.nn.CrossEntropyLoss(),
@@ -96,7 +97,8 @@ class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
 
     # Required for pl.LightningModule
     def forward(self, image, label):
-        # pl.Lightning convention: forward() defines prediction for inference
+        # pl.Lightning convention: forward() defines prediction for inference]
+        image = torch.tensor(np.stack(self.feature_extractor(image)["pixel_values"]), axis=0)
         return self.model(image, label)
 
     # Required for pl.LightningModule

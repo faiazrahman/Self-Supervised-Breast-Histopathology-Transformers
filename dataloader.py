@@ -155,7 +155,8 @@ class DinoBreastHistopathologyDataset(Dataset):
 
         image = Image.open(image_filepath).convert("RGB")
         image_transform = torchvision.transforms.Compose([
-            # torchvision.transforms.Resize(size=(self.image_dim, self.image_dim)),
+            # DINO expects images of size 224 by 224
+            torchvision.transforms.Resize(size=(224, 224)),
             torchvision.transforms.ToTensor(),
             # # All torchvision models expect the same normalization mean and std
             # # https://pytorch.org/docs/stable/torchvision/models.html

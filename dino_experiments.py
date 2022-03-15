@@ -48,6 +48,7 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         # FIXME THIS LINE RAISED THE FOLLOWING ERROR ---
         #  TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
         # image = image.cpu()
+        print(image)
         inputs = self.feature_extractor(images=image, return_tensors="pt")
         dino_embedding = self.dino_model(**inputs)
         dino_last_hidden_states = dino_embedding.last_hidden_state
@@ -199,21 +200,23 @@ if __name__ == "__main__":
     example_label = np.array([example_label])
     example_label = torch.from_numpy(example_label)
 
-    out = model(example_image, example_label)
+    out = model(example_image)
+
+    print(example)
     print(out)
 
-    # train_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=BATCH_SIZE, # TODO args.batch_size,
-    #     num_workers=NUM_CPUS,
-    #     drop_last=True
-    # )
-    # logging.info(train_loader)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        num_workers=NUM_CPUS,
+        drop_last=True
+    )
+    logging.info(train_loader)
 
-    # hparams = {
-    #     "num_classes": NUM_CLASSES, # TODO args.num_classes
-    #     "learning_rate": LEARNING_RATE,
-    # }
+    hparams = {
+        "num_classes": NUM_CLASSES, # TODO args.num_classes
+        "learning_rate": LEARNING_RATE,
+    }
 
     # # model = SelfSupervisedDinoTransformerModel(
     # #     num_classes=2,
@@ -221,37 +224,37 @@ if __name__ == "__main__":
     # #     dino_embedding_dim=384,
     # # )
 
-    # model = SelfSupervisedDinoIDCDetectionModel(hparams)
-    # print(model)
+    model = SelfSupervisedDinoIDCDetectionModel(hparams)
+    print(model)
 
-    # trainer = None
+    trainer = None
 
-    # latest_checkpoint = ModelCheckpoint(
-    #     filename="latest-{epoch}-{step}",
-    #     monitor="step",
-    #     mode="max",
-    #     every_n_train_steps=100,
-    #     save_top_k=2,
-    # )
-    # callbacks = [
-    #     PrintCallback(),
-    #     latest_checkpoint
-    # ]
+    latest_checkpoint = ModelCheckpoint(
+        filename="latest-{epoch}-{step}",
+        monitor="step",
+        mode="max",
+        every_n_train_steps=100,
+        save_top_k=2,
+    )
+    callbacks = [
+        PrintCallback(),
+        latest_checkpoint
+    ]
 
-    # if torch.cuda.is_available():
-    #     # Use all specified GPUs with data parallel strategy
-    #     # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
-    #     trainer = pl.Trainer(
-    #         # gpus=1, # TODO args.gpus,
-    #         gpus=list(range(torch.cuda.device_count())), # All available GPUs
-    #         strategy="dp", # TODO
-    #         callbacks=callbacks,
-    #         enable_checkpointing=True
-    #     )
-    # else:
-    #     trainer = pl.Trainer(
-    #         callbacks=callbacks
-    #     )
-    # logging.info(trainer)
+    if torch.cuda.is_available():
+        # Use all specified GPUs with data parallel strategy
+        # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
+        trainer = pl.Trainer(
+            # gpus=1, # TODO args.gpus,
+            gpus=list(range(torch.cuda.device_count())), # All available GPUs
+            strategy="dp", # TODO
+            callbacks=callbacks,
+            enable_checkpointing=True
+        )
+    else:
+        trainer = pl.Trainer(
+            callbacks=callbacks
+        )
+    logging.info(trainer)
 
-    # trainer.fit(model, train_loader)
+    trainer.fit(model, train_loader)
