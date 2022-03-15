@@ -1,8 +1,9 @@
 batch_size: 32 # (int)
-learning_rate: 1.0e-4 # (float) Note that the mantissa must have a decimal point to be parsed by YAML as a float (and not a str)
+learning_rate: 1.0e-5 # (float) Note that the mantissa must have a decimal point to be parsed by YAML as a float (and not a str)
 num_epochs: 10 # (int)
 dropout_p: 0.1 # (float)
 gpus: [0, 1] # [0] | [1] | [0, 1] Note that it must be a list of ints
-num_workers: 0 # (int) Note that 0 uses a single CPU, 40 is max on Ziva
+num_cpus: 40
 trained_model_version: 1 # (int)
 trained_model_path: null # (str)
+# FIXME NOT WORKING PROPERLY

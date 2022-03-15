@@ -1,15 +1,24 @@
+import sys
 import os
+from pathlib import Path
 import logging
 import argparse
+import enum
+
+import pandas as pd
+import numpy as np
 
 from tqdm import tqdm
 import yaml
 
+from PIL import Image
+
 import torch
-from torch.utils.data import DataLoader
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+import torchvision
 
 import pytorch_lightning as pl
-from pytorch_lightning.callbacks import ModelCheckpoint
 
 from dataloader import BreastHistopathologyDataset
 from model import ResNetModel, IDCDetectionModel, PrintCallback
@@ -21,11 +30,15 @@ NUM_CPUS = 0
 # torch.multiprocessing.set_start_method('spawn')
 
 DATA_PATH = "./data"
+PL_ASSETS_PATH = "./lightning_logs"
 BATCH_SIZE = 32
 NUM_CLASSES = 2
 DEFAULT_GPUS = list(range(torch.cuda.device_count()))
 
 logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+def get_checkpoint_filename_from_dir(path):
+    return os.listdir(path)[0]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -38,10 +51,7 @@ if __name__ == "__main__":
     #   passed manually as an arg -> specified in given config file -> default
     # This allows experiments defined in config files to be easily replicated
     # while tuning specific parameters via command-line args
-    parser.add_argument("--batch_size", type=int, default=None)
-    parser.add_argument("--learning_rate", type=float, default=None)
-    parser.add_argument("--num_epochs", type=int, default=None)
-    parser.add_argument("--dropout_p", type=float, default=None)
+    parser.add_argument("--trained_model_version", type=int, default=None, help="Version number (int) of trained model checkpoints, as stored in lightning_logs/")
     parser.add_argument("--gpus", type=str, help="Comma-separated list of ints with no spaces; e.g. \"0\" or \"0,1\"")
     args = parser.parse_args()
 
@@ -50,10 +60,6 @@ if __name__ == "__main__":
         with open(str(args.config), "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
 
-    if not args.batch_size: args.batch_size = config.get("batch_size", 32)
-    if not args.learning_rate: args.learning_rate = config.get("learning_rate", 1e-4)
-    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 3) # TODO FIXME 10?
-    if not args.dropout_p: args.dropout_p = config.get("dropout_p", 0.1)
     if args.gpus:
         args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
     else:
@@ -65,6 +71,10 @@ if __name__ == "__main__":
 
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
+    # NOTE: You must use the same exact seed for torch.Generate() for both the
+    # training and evaluation of a model to ensure that the two datasets have
+    # no overlapping examples; otherwise, evaluation will not be truly
+    # representative of model performance
     # https://pytorch.org/docs/stable/data.html#torch.utils.data.random_split
     train_dataset, test_dataset = torch.utils.data.random_split(
         full_dataset, [train_size, test_size],
@@ -75,49 +85,61 @@ if __name__ == "__main__":
     logging.info(f"Test dataset size: {len(test_dataset)}")
     logging.info(test_dataset)
 
-    train_loader = DataLoader(
-        train_dataset,
+    test_loader = DataLoader(
+        test_dataset,
         batch_size=BATCH_SIZE, # TODO args.batch_size,
         num_workers=NUM_CPUS,
         drop_last=True
     )
-    logging.info(train_loader)
+    logging.info(test_loader)
 
     hparams = {
         "num_classes": NUM_CLASSES, # TODO args.num_classes
-        "learning_rate": args.learning_rate
     }
 
-    model = IDCDetectionModel(hparams)
+    checkpoint_path = None
+    if args.trained_model_version:
+        assets_version = None
+        if isinstance(args.trained_model_version, int):
+            assets_version = "version_" + str(args.trained_model_version)
+        elif isinstance(args.trained_model_version, str):
+            assets_version = args.trained_model_version
+        else:
+            raise Exception("assets_version must be either an int (i.e. the version number, e.g. 16) or a str (e.g. \"version_16\"")
+        checkpoint_path = os.path.join(PL_ASSETS_PATH, assets_version, "checkpoints")
+    else:
+        raise Exception("A trained model must be specified for evaluation, by version number (in default PyTorch Lightning assets path ./lightning_logs)")
+
+    checkpoint_filename = get_checkpoint_filename_from_dir(checkpoint_path)
+    checkpoint_path = os.path.join(checkpoint_path, checkpoint_filename)
+    logging.info(checkpoint_path)
+
+    model = IDCDetectionModel.load_from_checkpoint(checkpoint_path)
 
     trainer = None
-
-    latest_checkpoint = ModelCheckpoint(
-        filename="latest-{epoch}-{step}",
-        monitor="step",
-        mode="max",
-        every_n_train_steps=100,
-        save_top_k=2,
-    )
-    callbacks = [
-        PrintCallback(),
-        latest_checkpoint
-    ]
-
     if torch.cuda.is_available():
         # Use all specified GPUs with data parallel strategy
         # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
+        callbacks = [PrintCallback()]
         trainer = pl.Trainer(
-            # gpus=1, # TODO args.gpus,
-            gpus=list(range(torch.cuda.device_count())), # All available GPUs
-            strategy="dp", # TODO
+            gpus=args.gpus,
+            strategy="dp",
             callbacks=callbacks,
-            enable_checkpointing=True
         )
     else:
-        trainer = pl.Trainer(
-            callbacks=callbacks
-        )
+        trainer = pl.Trainer()
     logging.info(trainer)
 
-    trainer.fit(model, train_loader)
+    trainer.test(model, dataloaders=test_loader)
+    # pl.LightningModule has some issues displaying the results automatically
+    # As a workaround, we can store the result logs as an attribute of the
+    # class instance and display them manually at the end of testing
+    # https://github.com/PyTorchLightning/pytorch-lightning/issues/1088
+    results = model.test_results
+
+    print(args.test_data_path)
+    print(checkpoint_path)
+    print(results)
+    logging.info(args.test_data_path)
+    logging.info(checkpoint_path)
+    logging.info(results)
