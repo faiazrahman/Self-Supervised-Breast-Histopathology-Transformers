@@ -35,7 +35,7 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         dropout_p=0.1,
     ):
         super(SelfSupervisedDinoTransformerModel, self).__init__()
-        # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
         self.dino_model = ViTModel.from_pretrained('facebook/dino-vits16')
 
@@ -44,14 +44,28 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         self.loss_fn = loss_fn
         self.dropout = torch.nn.Dropout(dropout_p)
 
-    def forward(self, image, label=None):
-        # FIXME THIS LINE RAISED THE FOLLOWING ERROR ---
-        #  TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
-        # image = image.cpu()
-        inputs = self.feature_extractor(images=image, return_tensors="pt")
-        dino_embedding = self.dino_model(**inputs)
+    # def forward(self, image, label):
+    #     # FIXME THIS LINE RAISED THE FOLLOWING ERROR ---
+    #     #  TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
+    #     image = image.cpu()
+    #     inputs = self.feature_extractor(images=image, return_tensors="pt")
+    #     dino_embedding = self.dino_model(**inputs)
+    #     dino_last_hidden_states = dino_embedding.last_hidden_state
+    #     print(list(dino_last_hidden_states.shape))
+
+    #     hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
+    #     logits = self.fc2(hidden)
+
+    #     # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
+    #     # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+    #     pred = logits
+    #     loss = self.loss_fn(pred, label)
+
+    #     return (pred, loss)
+
+    def forward(self, image_pixel_values, label=None):
+        dino_embedding = self.dino_model(pixel_values=image_pixel_values)
         dino_last_hidden_states = dino_embedding.last_hidden_state
-        print(list(dino_last_hidden_states.shape))
 
         hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
         logits = self.fc2(hidden)
@@ -59,11 +73,9 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
         # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         pred = logits
-        if label:
-            loss = self.loss_fn(pred, label)
-            return (pred, loss)
-        else:
-            return (pred, None)
+        loss = self.loss_fn(pred, label)
+
+        return (pred, loss)
 
 class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
 
@@ -188,70 +200,63 @@ if __name__ == "__main__":
     logging.info(f"Test dataset size: {len(test_dataset)}")
     logging.info(test_dataset)
 
-    model = SelfSupervisedDinoTransformerModel(
-        num_classes=2,
-        loss_fn=torch.nn.CrossEntropyLoss(),
-        dino_embedding_dim=384,
+    # example = train_dataset[0]
+    # example_image, example_label = example["image"], example["label"]
+    # example_label = np.array([example_label])
+    # example_label = torch.from_numpy(example_label)
+
+    # out = model(example_image, example_label)
+    # print(out)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        num_workers=NUM_CPUS,
+        drop_last=True
     )
+    logging.info(train_loader)
 
-    example = train_dataset[0]
-    example_image, example_label = example["image"], example["label"]
-    example_label = np.array([example_label])
-    example_label = torch.from_numpy(example_label)
+    hparams = {
+        "num_classes": NUM_CLASSES, # TODO args.num_classes
+        "learning_rate": LEARNING_RATE,
+    }
 
-    out = model(example_image, example_label)
-    print(out)
-
-    # train_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=BATCH_SIZE, # TODO args.batch_size,
-    #     num_workers=NUM_CPUS,
-    #     drop_last=True
+    # model = SelfSupervisedDinoTransformerModel(
+    #     num_classes=2,
+    #     loss_fn=torch.nn.CrossEntropyLoss(),
+    #     dino_embedding_dim=384,
     # )
-    # logging.info(train_loader)
+    model = SelfSupervisedDinoIDCDetectionModel(hparams)
+    print(model)
 
-    # hparams = {
-    #     "num_classes": NUM_CLASSES, # TODO args.num_classes
-    #     "learning_rate": LEARNING_RATE,
-    # }
+    trainer = None
 
-    # # model = SelfSupervisedDinoTransformerModel(
-    # #     num_classes=2,
-    # #     loss_fn=torch.nn.CrossEntropyLoss(),
-    # #     dino_embedding_dim=384,
-    # # )
+    latest_checkpoint = ModelCheckpoint(
+        filename="latest-{epoch}-{step}",
+        monitor="step",
+        mode="max",
+        every_n_train_steps=100,
+        save_top_k=2,
+    )
+    callbacks = [
+        PrintCallback(),
+        latest_checkpoint
+    ]
 
-    # model = SelfSupervisedDinoIDCDetectionModel(hparams)
-    # print(model)
+    if torch.cuda.is_available():
+        # Use all specified GPUs with data parallel strategy
+        # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
+        trainer = pl.Trainer(
+            # gpus=1, # TODO args.gpus,
+            gpus=list(range(torch.cuda.device_count())), # All available GPUs
+            strategy="dp", # TODO
+            callbacks=callbacks,
+            enable_checkpointing=True
+        )
+    else:
+        trainer = pl.Trainer(
+            callbacks=callbacks
+        )
+    logging.info(trainer)
 
-    # trainer = None
-
-    # latest_checkpoint = ModelCheckpoint(
-    #     filename="latest-{epoch}-{step}",
-    #     monitor="step",
-    #     mode="max",
-    #     every_n_train_steps=100,
-    #     save_top_k=2,
-    # )
-    # callbacks = [
-    #     PrintCallback(),
-    #     latest_checkpoint
-    # ]
-
-    # if torch.cuda.is_available():
-    #     # Use all specified GPUs with data parallel strategy
-    #     # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
-    #     trainer = pl.Trainer(
-    #         # gpus=1, # TODO args.gpus,
-    #         gpus=list(range(torch.cuda.device_count())), # All available GPUs
-    #         strategy="dp", # TODO
-    #         callbacks=callbacks,
-    #         enable_checkpointing=True
-    #     )
-    # else:
-    #     trainer = pl.Trainer(
-    #         callbacks=callbacks
-    #     )
-    # logging.info(trainer)
-
-    # trainer.fit(model, train_loader)
+    trainer.fit(model, train_loader)
