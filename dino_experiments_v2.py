@@ -23,6 +23,8 @@ NUM_CPUS = 0 # 0 | 40
 
 DINO_EMBEDDING_DIM = 384
 
+losses = []
+
 class SelfSupervisedDinoTransformerModel(nn.Module):
 
     def __init__(
@@ -65,7 +67,7 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
 
     def forward(self, image_pixel_values, label=None):
         dino_embedding = self.dino_model(pixel_values=image_pixel_values)
-        dino_last_hidden_states = dino_embedding.last_hidden_state#[:,0]
+        dino_last_hidden_states = dino_embedding.last_hidden_state[:,0]
 
         hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
         logits = self.fc2(hidden)
@@ -73,6 +75,10 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
         # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         pred = logits
+        # print(f"pred {pred.shape}")
+        # print(f"label {label}")
+        # print(pred)
+        # print(label)
         loss = self.loss_fn(pred, label)
 
         return (pred, loss)
