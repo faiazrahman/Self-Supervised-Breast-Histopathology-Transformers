@@ -26,7 +26,7 @@ from model import ResNetModel, IDCDetectionModel, PrintCallback
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
 # Set to 0 and comment out torch.multiprocessing line if multiprocessing gives errors
-NUM_CPUS = 0
+NUM_CPUS = 40
 # torch.multiprocessing.set_start_method('spawn')
 
 DATA_PATH = "./data"
@@ -137,9 +137,7 @@ if __name__ == "__main__":
     # https://github.com/PyTorchLightning/pytorch-lightning/issues/1088
     results = model.test_results
 
-    print(args.test_data_path)
     print(checkpoint_path)
     print(results)
-    logging.info(args.test_data_path)
     logging.info(checkpoint_path)
     logging.info(results)

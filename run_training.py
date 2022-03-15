@@ -65,6 +65,10 @@ if __name__ == "__main__":
 
     train_size = int(0.8 * len(full_dataset))
     test_size = len(full_dataset) - train_size
+    # NOTE: You must use the same exact seed for torch.Generate() for both the
+    # training and evaluation of a model to ensure that the two datasets have
+    # no overlapping examples; otherwise, evaluation will not be truly
+    # representative of model performance
     # https://pytorch.org/docs/stable/data.html#torch.utils.data.random_split
     train_dataset, test_dataset = torch.utils.data.random_split(
         full_dataset, [train_size, test_size],
