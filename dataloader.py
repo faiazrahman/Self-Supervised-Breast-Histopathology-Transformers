@@ -13,7 +13,6 @@ import pickle
 from PIL import Image
 
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import torchvision
 
@@ -23,6 +22,7 @@ DATA_PATH = "./data"
 PL_ASSETS_PATH = "./lightning_logs"
 IMAGE_EXTENSION = ".png"
 PRESAVED_IMAGE_FILEPATHS = "image_filepaths.pkl"
+DINO_IMAGE_SIZE = 224
 
 class BreastHistopathologyDataset(Dataset):
 
@@ -84,7 +84,6 @@ class BreastHistopathologyDataset(Dataset):
             torchvision.transforms.ToTensor(),
             # All torchvision models expect the same normalization mean and std
             # https://pytorch.org/docs/stable/torchvision/models.html
-            # TODO: Should we do this for the DINO model too?
             torchvision.transforms.Normalize(
                 mean=(0.485, 0.456, 0.406),
                 std=(0.229, 0.224, 0.225)
@@ -101,9 +100,7 @@ class BreastHistopathologyDataset(Dataset):
 
 class DinoBreastHistopathologyDataset(Dataset):
 
-    def __init__(self, force_reset=False, image_dim=30):
-
-        self.image_dim = image_dim
+    def __init__(self, force_reset=False):
 
         # Get a list of all image files, across all patients
         image_filepaths = list()
@@ -155,16 +152,9 @@ class DinoBreastHistopathologyDataset(Dataset):
 
         image = Image.open(image_filepath).convert("RGB")
         image_transform = torchvision.transforms.Compose([
-            # DINO expects images of size 224 by 224
-            torchvision.transforms.Resize(size=(224, 224)),
+            # DINO Vision Transformer expects images of size 224 by 224
+            torchvision.transforms.Resize(size=(DINO_IMAGE_SIZE, DINO_IMAGE_SIZE)),
             torchvision.transforms.ToTensor(),
-            # # All torchvision models expect the same normalization mean and std
-            # # https://pytorch.org/docs/stable/torchvision/models.html
-            # # TODO: Should we do this for the DINO model too?
-            # torchvision.transforms.Normalize(
-            #     mean=(0.485, 0.456, 0.406),
-            #     std=(0.229, 0.224, 0.225)
-            # ),
         ])
         image = image_transform(image)
 
