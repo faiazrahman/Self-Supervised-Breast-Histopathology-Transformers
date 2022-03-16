@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from dataloader import BreastHistopathologyDataset
-from model import ResNetModel, IDCDetectionModel, PrintCallback
+from model import ResNetModel, ResNetIDCDetectionModel, PrintCallback
 
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         "learning_rate": args.learning_rate
     }
 
-    model = IDCDetectionModel(hparams)
+    model = ResNetIDCDetectionModel(hparams)
 
     trainer = None
 
@@ -116,7 +116,8 @@ if __name__ == "__main__":
             gpus=list(range(torch.cuda.device_count())), # All available GPUs
             strategy="dp", # TODO
             callbacks=callbacks,
-            enable_checkpointing=True
+            enable_checkpointing=True,
+            max_epochs=args.num_epochs
         )
     else:
         trainer = pl.Trainer(

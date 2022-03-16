@@ -27,29 +27,12 @@ logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 print("CUDA available:", torch.cuda.is_available())
 
-# class SelfSupervisedDinoTransformerModel(nn.Module):
-
-#     def __init__(
-#         self,
-#         num_classes,
-#         loss_fn,
-#         image_feature_dim,
-#         hidden_dim=512,
-#         dropout_p=0.1,
-#     ):
-#         super(SelfSupervisedDinoTransformerModel, self).__init__()
-#         pass
-
-#     def forward(self, image, label):
-#         pass
-
 class SelfSupervisedDinoTransformerModel(nn.Module):
 
     def __init__(
         self,
         num_classes,
         loss_fn,
-        # image_feature_dim,
         dino_embedding_dim,
         hidden_dim=512,
         dropout_p=0.1,
@@ -64,25 +47,6 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         self.loss_fn = loss_fn
         self.dropout = torch.nn.Dropout(dropout_p)
 
-    # def forward(self, image, label):
-    #     # FIXME THIS LINE RAISED THE FOLLOWING ERROR ---
-    #     #  TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
-    #     image = image.cpu()
-    #     inputs = self.feature_extractor(images=image, return_tensors="pt")
-    #     dino_embedding = self.dino_model(**inputs)
-    #     dino_last_hidden_states = dino_embedding.last_hidden_state
-    #     print(list(dino_last_hidden_states.shape))
-
-    #     hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
-    #     logits = self.fc2(hidden)
-
-    #     # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
-    #     # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-    #     pred = logits
-    #     loss = self.loss_fn(pred, label)
-
-    #     return (pred, loss)
-
     def forward(self, image_pixel_values, label=None):
         dino_embedding = self.dino_model(pixel_values=image_pixel_values)
         dino_last_hidden_states = dino_embedding.last_hidden_state[:,0]
@@ -93,18 +57,14 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
         # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         pred = logits
-        # print(f"pred {pred.shape}")
-        # print(f"label {label}")
-        # print(pred)
-        # print(label)
         loss = self.loss_fn(pred, label)
 
         return (pred, loss)
 
-class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
+class SelfSupervisedDinoResNetIDCDetectionModel(pl.LightningModule):
 
     def __init__(self, hparams=None):
-        super(SelfSupervisedDinoIDCDetectionModel, self).__init__()
+        super(SelfSupervisedDinoResNetIDCDetectionModel, self).__init__()
         if hparams:
             # Cannot reassign self.hparams in pl.LightningModule; must use update()
             # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525
@@ -223,15 +183,10 @@ class ResNetModel(nn.Module):
 
         return (pred, loss)
 
-class IDCDetectionModel(pl.LightningModule):
-
-    # TODO: Can we reuse this LightningModule for all the models?
-    #       Currently only being used for ResNetModel
-    # UPDATE: No use a different LightningModule for each model
-    # TODO: rename this one ResNetIDCDetectionModel
+class ResNetIDCDetectionModel(pl.LightningModule):
 
     def __init__(self, hparams=None):
-        super(IDCDetectionModel, self).__init__()
+        super(ResNetIDCDetectionModel, self).__init__()
         if hparams:
             # Cannot reassign self.hparams in pl.LightningModule; must use update()
             # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525

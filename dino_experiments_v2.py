@@ -14,7 +14,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from dataloader import BreastHistopathologyDataset, DinoBreastHistopathologyDataset
-from model import ResNetModel, IDCDetectionModel, PrintCallback
+from model import ResNetModel, ResNetIDCDetectionModel, PrintCallback
 
 NUM_CLASSES = 2
 LEARNING_RATE = 1e-4
@@ -83,10 +83,10 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
 
         return (pred, loss)
 
-class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
+class SelfSupervisedDinoResNetIDCDetectionModel(pl.LightningModule):
 
     def __init__(self, hparams=None):
-        super(SelfSupervisedDinoIDCDetectionModel, self).__init__()
+        super(SelfSupervisedDinoResNetIDCDetectionModel, self).__init__()
         if hparams:
             # Cannot reassign self.hparams in pl.LightningModule; must use update()
             # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     #     loss_fn=torch.nn.CrossEntropyLoss(),
     #     dino_embedding_dim=384,
     # )
-    model = SelfSupervisedDinoIDCDetectionModel(hparams)
+    model = SelfSupervisedDinoResNetIDCDetectionModel(hparams)
     print(model)
 
     trainer = None

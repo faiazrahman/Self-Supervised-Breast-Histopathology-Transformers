@@ -21,7 +21,7 @@ import torchvision
 import pytorch_lightning as pl
 
 from dataloader import BreastHistopathologyDataset, DinoBreastHistopathologyDataset
-from model import ResNetModel, IDCDetectionModel, SelfSupervisedDinoIDCDetectionModel, PrintCallback
+from model import ResNetIDCDetectionModel, SelfSupervisedDinoResNetIDCDetectionModel, PrintCallback
 
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
@@ -127,9 +127,9 @@ if __name__ == "__main__":
 
     model = None
     if args.model_type == "resnet":
-        model = IDCDetectionModel.load_from_checkpoint(checkpoint_path)
+        model = ResNetIDCDetectionModel.load_from_checkpoint(checkpoint_path)
     elif args.model_type == "dino":
-        model = SelfSupervisedDinoIDCDetectionModel.load_from_checkpoint(checkpoint_path)
+        model = SelfSupervisedDinoResNetIDCDetectionModel.load_from_checkpoint(checkpoint_path)
     else:
         raise Exception("Given model_type is invalid")
 
