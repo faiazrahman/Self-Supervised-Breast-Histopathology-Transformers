@@ -61,10 +61,10 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
 
         return (pred, loss)
 
-class SelfSupervisedDinoResNetIDCDetectionModel(pl.LightningModule):
+class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
 
     def __init__(self, hparams=None):
-        super(SelfSupervisedDinoResNetIDCDetectionModel, self).__init__()
+        super(SelfSupervisedDinoIDCDetectionModel, self).__init__()
         if hparams:
             # Cannot reassign self.hparams in pl.LightningModule; must use update()
             # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525
