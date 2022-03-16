@@ -20,8 +20,8 @@ import torchvision
 
 import pytorch_lightning as pl
 
-from dataloader import BreastHistopathologyDataset
-from model import ResNetModel, IDCDetectionModel, PrintCallback
+from dataloader import BreastHistopathologyDataset, DinoBreastHistopathologyDataset
+from model import ResNetModel, IDCDetectionModel, SelfSupervisedDinoIDCDetectionModel, PrintCallback
 
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
@@ -52,6 +52,7 @@ if __name__ == "__main__":
     # This allows experiments defined in config files to be easily replicated
     # while tuning specific parameters via command-line args
     parser.add_argument("--trained_model_version", type=int, default=None, help="Version number (int) of trained model checkpoints, as stored in lightning_logs/")
+    parser.add_argument("--model_type", type=str, default=None, help="dino | resnet; Must match the type of the trained model being evaluated")
     parser.add_argument("--gpus", type=str, help="Comma-separated list of ints with no spaces; e.g. \"0\" or \"0,1\"")
     args = parser.parse_args()
 
@@ -60,12 +61,22 @@ if __name__ == "__main__":
         with open(str(args.config), "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
 
+    if not args.model_type:
+        args.model_type = config.get("model_type", "resnet")
     if args.gpus:
         args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
     else:
         args.gpus = config.get("gpus", DEFAULT_GPUS)
 
-    full_dataset = BreastHistopathologyDataset()
+    full_dataset = None
+    if args.model_type == "resnet":
+        full_dataset = BreastHistopathologyDataset()
+    elif args.model_type == "dino":
+        full_dataset = DinoBreastHistopathologyDataset()
+    else:
+        raise Exception("Given model_type is invalid")
+
+    # full_dataset = BreastHistopathologyDataset() # TODO rm
     logging.info("Total dataset size: {}".format(len(full_dataset)))
     logging.info(full_dataset)
 
@@ -114,7 +125,13 @@ if __name__ == "__main__":
     checkpoint_path = os.path.join(checkpoint_path, checkpoint_filename)
     logging.info(checkpoint_path)
 
-    model = IDCDetectionModel.load_from_checkpoint(checkpoint_path)
+    model = None
+    if args.model_type == "resnet":
+        model = IDCDetectionModel.load_from_checkpoint(checkpoint_path)
+    elif args.model_type == "dino":
+        model = SelfSupervisedDinoIDCDetectionModel.load_from_checkpoint(checkpoint_path)
+    else:
+        raise Exception("Given model_type is invalid")
 
     trainer = None
     if torch.cuda.is_available():

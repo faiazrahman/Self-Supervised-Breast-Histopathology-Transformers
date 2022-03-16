@@ -1,6 +1,8 @@
 import os
 import logging
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -10,11 +12,14 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
+from transformers import ViTFeatureExtractor, ViTModel
+
 NUM_CLASSES = 2
 LEARNING_RATE = 1e-4
 DROPOUT_P = 0.1
 
 RESNET_OUT_DIM = 2048
+DINO_EMBEDDING_DIM = 384
 
 losses = []
 
@@ -22,21 +27,168 @@ logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 print("CUDA available:", torch.cuda.is_available())
 
+# class SelfSupervisedDinoTransformerModel(nn.Module):
+
+#     def __init__(
+#         self,
+#         num_classes,
+#         loss_fn,
+#         image_feature_dim,
+#         hidden_dim=512,
+#         dropout_p=0.1,
+#     ):
+#         super(SelfSupervisedDinoTransformerModel, self).__init__()
+#         pass
+
+#     def forward(self, image, label):
+#         pass
+
 class SelfSupervisedDinoTransformerModel(nn.Module):
 
     def __init__(
         self,
         num_classes,
         loss_fn,
-        image_feature_dim,
+        # image_feature_dim,
+        dino_embedding_dim,
         hidden_dim=512,
         dropout_p=0.1,
     ):
         super(SelfSupervisedDinoTransformerModel, self).__init__()
-        pass
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
+        self.dino_model = ViTModel.from_pretrained('facebook/dino-vits16')
 
+        self.fc1 = torch.nn.Linear(in_features=dino_embedding_dim, out_features=hidden_dim)
+        self.fc2 = torch.nn.Linear(in_features=hidden_dim, out_features=num_classes)
+        self.loss_fn = loss_fn
+        self.dropout = torch.nn.Dropout(dropout_p)
+
+    # def forward(self, image, label):
+    #     # FIXME THIS LINE RAISED THE FOLLOWING ERROR ---
+    #     #  TypeError: can't convert cuda:0 device type tensor to numpy. Use Tensor.cpu() to copy the tensor to host memory first.
+    #     image = image.cpu()
+    #     inputs = self.feature_extractor(images=image, return_tensors="pt")
+    #     dino_embedding = self.dino_model(**inputs)
+    #     dino_last_hidden_states = dino_embedding.last_hidden_state
+    #     print(list(dino_last_hidden_states.shape))
+
+    #     hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
+    #     logits = self.fc2(hidden)
+
+    #     # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
+    #     # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+    #     pred = logits
+    #     loss = self.loss_fn(pred, label)
+
+    #     return (pred, loss)
+
+    def forward(self, image_pixel_values, label=None):
+        dino_embedding = self.dino_model(pixel_values=image_pixel_values)
+        dino_last_hidden_states = dino_embedding.last_hidden_state[:,0]
+
+        hidden = torch.nn.functional.relu(self.fc1(dino_last_hidden_states))
+        logits = self.fc2(hidden)
+
+        # nn.CrossEntropyLoss expects raw logits as model output, NOT torch.nn.functional.softmax(logits, dim=1)
+        # https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+        pred = logits
+        # print(f"pred {pred.shape}")
+        # print(f"label {label}")
+        # print(pred)
+        # print(label)
+        loss = self.loss_fn(pred, label)
+
+        return (pred, loss)
+
+class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
+
+    def __init__(self, hparams=None):
+        super(SelfSupervisedDinoIDCDetectionModel, self).__init__()
+        if hparams:
+            # Cannot reassign self.hparams in pl.LightningModule; must use update()
+            # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525
+            self.hparams.update(hparams)
+
+        self.learning_rate = self.hparams.get("learning_rate", LEARNING_RATE)
+
+        self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
+        self.model = SelfSupervisedDinoTransformerModel(
+            num_classes=self.hparams.get("num_classes", NUM_CLASSES),
+            loss_fn=torch.nn.CrossEntropyLoss(),
+            dino_embedding_dim=DINO_EMBEDDING_DIM,
+        )
+
+    # Required for pl.LightningModule
     def forward(self, image, label):
-        pass
+        # pl.Lightning convention: forward() defines prediction for inference]
+        image = torch.tensor(np.stack(self.feature_extractor(image)["pixel_values"]), axis=0)
+        return self.model(image, label)
+
+    # Required for pl.LightningModule
+    def training_step(self, batch, batch_idx):
+        global losses
+        # pl.Lightning convention: training_step() defines prediction and
+        # accompanying loss for training, independent of forward()
+        image, label = batch["image"], batch["label"]
+
+        pred, loss = self.model(image, label)
+        self.log("train_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        print(loss.item())
+        losses.append(loss.item())
+        return loss
+
+    # Optional for pl.LightningModule
+    def training_step_end(self, batch_parts):
+        """
+        Aggregates results when training using a strategy that splits data
+        from each batch across GPUs (e.g. data parallel)
+
+        Note that training_step returns a loss, thus batch_parts returns a list
+        of K loss values (where there are K GPUs being used)
+        """
+        return sum(batch_parts) / len(batch_parts)
+
+    # Optional for pl.LightningModule
+    def test_step(self, batch, batch_idx):
+        image, label = batch["image"], batch["label"]
+        pred, loss = self.model(image, label)
+        pred_label = torch.argmax(pred, dim=1)
+        accuracy = torch.sum(pred_label == label).item() / (len(label) * 1.0)
+        output = {
+            'test_loss': loss,
+            'test_acc': torch.tensor(accuracy).cuda()
+        }
+        print(loss.item(), output['test_acc'])
+        return output
+
+    # Optional for pl.LightningModule
+    def test_epoch_end(self, outputs):
+        avg_loss = torch.stack([x["test_loss"] for x in outputs]).mean()
+        avg_accuracy = torch.stack([x["test_acc"] for x in outputs]).mean()
+        logs = {
+            'test_loss': avg_loss,
+            'test_acc': avg_accuracy
+        }
+
+        # pl.LightningModule has some issues displaying the results automatically
+        # As a workaround, we can store the result logs as an attribute of the
+        # class instance and display them manually at the end of testing
+        # https://github.com/PyTorchLightning/pytorch-lightning/issues/1088
+        self.test_results = logs
+
+        return {
+            'avg_test_loss': avg_loss,
+            'avg_test_acc': avg_accuracy,
+            'log': logs,
+            'progress_bar': logs
+        }
+
+    # Required for pl.LightningModule
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        # optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=0.9)
+        return optimizer
 
 class ResNetModel(nn.Module):
 
@@ -71,19 +223,12 @@ class ResNetModel(nn.Module):
 
         return (pred, loss)
 
-class ConvolutionalNeuralNetModel(nn.Module):
-
-    def __init__(self):
-        pass
-
-    def forward(self, image, label):
-        pass
-
-
 class IDCDetectionModel(pl.LightningModule):
 
-    # TODO: Can we reuse this trainer for all the models?
+    # TODO: Can we reuse this LightningModule for all the models?
     #       Currently only being used for ResNetModel
+    # UPDATE: No use a different LightningModule for each model
+    # TODO: rename this one ResNetIDCDetectionModel
 
     def __init__(self, hparams=None):
         super(IDCDetectionModel, self).__init__()
@@ -182,3 +327,11 @@ class PrintCallback(Callback):
         global losses
         for loss_val in losses:
             print(loss_val)
+
+class ConvolutionalNeuralNetModel(nn.Module):
+
+    def __init__(self):
+        pass
+
+    def forward(self, image, label):
+        pass
