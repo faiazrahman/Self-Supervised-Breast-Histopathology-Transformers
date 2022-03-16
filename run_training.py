@@ -55,7 +55,7 @@ if __name__ == "__main__":
         args.model_type = config.get("model_type", "resnet")
     if not args.batch_size: args.batch_size = config.get("batch_size", 32)
     if not args.learning_rate: args.learning_rate = config.get("learning_rate", 1e-4)
-    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 1) # TODO FIXME 10?
+    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 3) # TODO FIXME 10?
     if not args.dropout_p: args.dropout_p = config.get("dropout_p", 0.1)
     if args.gpus:
         args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
