@@ -11,8 +11,8 @@ from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from dataloader import BreastHistopathologyDataset
-from model import ResNetModel, ResNetIDCDetectionModel, PrintCallback
+from dataloader import BreastHistopathologyDataset, DinoBreastHistopathologyDataset
+from model import ResNetIDCDetectionModel, SelfSupervisedDinoIDCDetectionModel, PrintCallback
 
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
@@ -38,6 +38,7 @@ if __name__ == "__main__":
     #   passed manually as an arg -> specified in given config file -> default
     # This allows experiments defined in config files to be easily replicated
     # while tuning specific parameters via command-line args
+    parser.add_argument("--model_type", type=str, default=None, help="dino | resnet")
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--learning_rate", type=float, default=None)
     parser.add_argument("--num_epochs", type=int, default=None)
@@ -50,16 +51,24 @@ if __name__ == "__main__":
         with open(str(args.config), "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
 
+    if not args.model_type:
+        args.model_type = config.get("model_type", "resnet")
     if not args.batch_size: args.batch_size = config.get("batch_size", 32)
     if not args.learning_rate: args.learning_rate = config.get("learning_rate", 1e-4)
-    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 3) # TODO FIXME 10?
+    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 1) # TODO FIXME 10?
     if not args.dropout_p: args.dropout_p = config.get("dropout_p", 0.1)
     if args.gpus:
         args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
     else:
         args.gpus = config.get("gpus", DEFAULT_GPUS)
 
-    full_dataset = BreastHistopathologyDataset()
+    full_dataset = None
+    if args.model_type == "resnet":
+        full_dataset = BreastHistopathologyDataset()
+    elif args.model_type == "dino":
+        full_dataset = DinoBreastHistopathologyDataset()
+    else:
+        raise Exception("Given model_type is invalid")
     logging.info("Total dataset size: {}".format(len(full_dataset)))
     logging.info(full_dataset)
 
@@ -92,7 +101,13 @@ if __name__ == "__main__":
         "learning_rate": args.learning_rate
     }
 
-    model = ResNetIDCDetectionModel(hparams)
+    model = None
+    if args.model_type == "resnet":
+        model = ResNetIDCDetectionModel(hparams)
+    elif args.model_type == "dino":
+        model = SelfSupervisedDinoIDCDetectionModel(hparams)
+    else:
+        raise Exception("Given model_type is invalid")
 
     trainer = None
 
@@ -113,7 +128,8 @@ if __name__ == "__main__":
         # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
         trainer = pl.Trainer(
             # gpus=1, # TODO args.gpus,
-            gpus=list(range(torch.cuda.device_count())), # All available GPUs
+            # gpus=list(range(torch.cuda.device_count())), # All available GPUs
+            gpus=[0,1,2,3],
             strategy="dp", # TODO
             callbacks=callbacks,
             enable_checkpointing=True,
@@ -125,4 +141,5 @@ if __name__ == "__main__":
         )
     logging.info(trainer)
 
+    print(f"Starting training for {args.model_type} model for {args.num_epochs} epochs...")
     trainer.fit(model, train_loader)

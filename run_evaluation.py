@@ -75,8 +75,6 @@ if __name__ == "__main__":
         full_dataset = DinoBreastHistopathologyDataset()
     else:
         raise Exception("Given model_type is invalid")
-
-    # full_dataset = BreastHistopathologyDataset() # TODO rm
     logging.info("Total dataset size: {}".format(len(full_dataset)))
     logging.info(full_dataset)
 
@@ -139,7 +137,8 @@ if __name__ == "__main__":
         # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
         callbacks = [PrintCallback()]
         trainer = pl.Trainer(
-            gpus=args.gpus,
+            # gpus=args.gpus,
+            gpus=[0,1,2,3],
             strategy="dp",
             callbacks=callbacks,
         )
