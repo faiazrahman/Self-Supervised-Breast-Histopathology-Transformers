@@ -57,6 +57,8 @@ if __name__ == "__main__":
     # This allows experiments defined in config files to be easily replicated
     # while tuning specific parameters via command-line args
     parser.add_argument("--trained_model_version", type=int, default=None, help="Version number (int) of trained model checkpoints, as stored in lightning_logs/")
+    parser.add_argument("--dino_model_size", type=str, default=None, help="base | small")
+    parser.add_argument("--dino_patch_size", type=int, default=None, help="8 | 16")
     parser.add_argument("--model_type", type=str, default=None, help="dino | resnet; Must match the type of the trained model being evaluated")
     parser.add_argument("--gpus", type=str, help="Comma-separated list of ints with no spaces; e.g. \"0\" or \"0,1\"")
     args = parser.parse_args()
@@ -127,11 +129,36 @@ if __name__ == "__main__":
     checkpoint_path = os.path.join(checkpoint_path, checkpoint_filename)
     logging.info(checkpoint_path)
 
+    if args.model_type == "dino":
+        # Note: This is only needed for runs where self.save_hyperparmeters()
+        # was not live in the __init__() of the pl.LightningModule
+        # Otherwise, we can load directly from the checkpoint
+        dino_model = "facebook/dino-vit"
+        if args.dino_model_size == "small":
+            dino_model += "s"
+        elif args.dino_model_size == "base":
+            dino_model += "b"
+
+        if args.dino_patch_size == 8:
+            dino_model += "8"
+        elif args.dino_patch_size == 16:
+            dino_model += "16"
+
     model = None
     if args.model_type == "resnet":
         model = ResNetIDCDetectionModel.load_from_checkpoint(checkpoint_path)
     elif args.model_type == "dino":
-        model = SelfSupervisedDinoIDCDetectionModel.load_from_checkpoint(checkpoint_path)
+        if args.dino_model_size and args.dino_patch_size:
+            model = SelfSupervisedDinoIDCDetectionModel.load_from_checkpoint(
+                # We pass in the dino_model hparam, which is needed for setting up
+                # the correct dimension sizes (i.e. dino-small has hidden dimension
+                # 384 while dino-base has hidden dimension 768)
+                # Note that it is not needed if self.save_hyperparameters() is in
+                # the __init__() of the model; This branch of the conditional
+                # assumes that it was not live, so we need to manually set it up
+                checkpoint_path, dino_model=dino_model)
+        else:
+            model = SelfSupervisedDinoIDCDetectionModel.load_from_checkpoint(checkpoint_path)
     else:
         raise Exception("Given model_type is invalid")
 
@@ -142,7 +169,7 @@ if __name__ == "__main__":
         callbacks = [PrintCallback()]
         trainer = pl.Trainer(
             # gpus=args.gpus,
-            gpus=[3,4],
+            gpus=[5,7],
             strategy="dp",
             callbacks=callbacks,
         )

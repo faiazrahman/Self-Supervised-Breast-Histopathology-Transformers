@@ -26,7 +26,7 @@ PATCH_SIZE_S16_MODEL = 'facebook/dino-vits16'
 PATCH_SIZE_S8_MODEL = 'facebook/dino-vits8'
 PATCH_SIZE_B16_MODEL = 'facebook/dino-vitb16'
 PATCH_SIZE_B8_MODEL = 'facebook/dino-vitb8'
-DINO_MODEL = PATCH_SIZE_S8_MODEL
+DINO_MODEL = PATCH_SIZE_B16_MODEL
 
 losses = []
 
@@ -53,10 +53,13 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         self.dino_model = ViTModel.from_pretrained(dino_model)
 
         dino_embedding_dim = None
-        if self.dino_model == "small":
+        # Note that dino_model is the str name of the model, whereas
+        # self.dino_model is the actual ViTModel object
+        if dino_model in [PATCH_SIZE_S16_MODEL, PATCH_SIZE_S8_MODEL]:
             dino_embedding_dim = DINO_EMBEDDING_DIM_SMALL
-        elif self.dino_model == "base":
+        elif dino_model in [PATCH_SIZE_B16_MODEL, PATCH_SIZE_B8_MODEL]:
             dino_embedding_dim = DINO_EMBEDDING_DIM_BASE
+        # dino_embedding_dim = 768
 
         self.fc1 = torch.nn.Linear(in_features=dino_embedding_dim, out_features=hidden_dim)
         self.fc2 = torch.nn.Linear(in_features=hidden_dim, out_features=num_classes)
@@ -97,6 +100,10 @@ class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
             dino_model=self.dino_model,
         )
         logging.info(self.dino_model)
+
+        # When reloading the model for evaluation, we will need the
+        # hyperparameters as they are now
+        self.save_hyperparameters()
 
     # Required for pl.LightningModule
     def forward(self, image, label):
