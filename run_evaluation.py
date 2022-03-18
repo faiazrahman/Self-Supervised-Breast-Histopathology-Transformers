@@ -30,9 +30,8 @@ from model import ResNetIDCDetectionModel, SelfSupervisedDinoIDCDetectionModel, 
 
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
-# Set to 0 and comment out torch.multiprocessing line if multiprocessing gives errors
+# Set to 0 to turn off multiprocessing
 NUM_CPUS = 40
-# torch.multiprocessing.set_start_method('spawn')
 
 DATA_PATH = "./data"
 PL_ASSETS_PATH = "./lightning_logs"
@@ -102,7 +101,7 @@ if __name__ == "__main__":
 
     test_loader = DataLoader(
         test_dataset,
-        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        batch_size=BATCH_SIZE,
         num_workers=NUM_CPUS,
         drop_last=True
     )
