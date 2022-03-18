@@ -23,7 +23,7 @@ device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cp
 
 NUM_CPUS = 40 # 0 | 40
 
-TRAIN_FILES = "data/"
+# TRAIN_FILES = "data/"
 IMAGE_SIZE = 256
 PATCH_SIZE = 16
 ZERO_PCT = 0.1
@@ -47,55 +47,6 @@ STUDENT_TEMPERATURE = 0.1
 TEACHER_TEMPERATURE = 0.05
 CENTER_MOMENTUM = 0.9
 TEACHER_MOMENTUM = 0.995
-
-class OriginalImageData(Dataset):
-    """ Original image data, for validation """
-
-    def __init__(self, image_files):
-        self.image_files = image_files
-        self.resize = torchvision.transforms.Resize(IMAGE_SIZE, IMAGE_SIZE)
-
-    def __len__(self):
-        return len(self.image_files)
-
-    def __getitem__(self, idx):
-        original_image = torchvision.io.read_image(self.image_files[idx])
-
-        if original_image.shape[0] == 1:
-            # Add channels to ensure that all images have 3 channels
-            original_image = torch.cat([original_image] * 3)
-        resized_output = self.resize(original_image)
-        return resized_output
-
-class TrainingImageData(Dataset):
-    """
-    Transformed image data (with two transformed versions per original image),
-    for training via DINO algorithm
-    """
-
-    def __init__(self, image_files):
-        self.image_files = image_files
-        self.transformA = torchvision.transforms.RandomResizedCrop(
-            (IMAGE_SIZE, IMAGE_SIZE), scale=(0.5, 1.0))
-        self.transformB = torchvision.transforms.RandomResizedCrop(
-            (IMAGE_SIZE, IMAGE_SIZE))
-
-    def __len__(self):
-        return len(self.image_files)
-
-    def __getitem__(self, idx):
-        # Given image is passed through two transforms where one is at leas
-        # half as large as the original image
-        original_image = torchvision.io.read_image(self.image_files[idx])
-        transformed_imageA = self.transformA(original_image)
-        transformed_imageB = self.transformB(original_image)
-
-        if original_image.shape[0] == 1:
-            # Add channels to ensure that all images have 3 channels
-            transformed_imageA = torch.cat([transformed_imageA] * 3)
-            transformed_imageB = torch.cat([transformed_imageB] * 3)
-
-        return transformed_imageA, transformed_imageB
 
 class CollateFunction:
     """
