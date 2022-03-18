@@ -1,5 +1,6 @@
 """
 python run_training.py --model_type dino --dino_model_size base --dino_patch_size 8
+python run_training.py --model_type resnet
 """
 
 import os

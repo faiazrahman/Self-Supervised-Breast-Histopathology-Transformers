@@ -59,7 +59,6 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
             dino_embedding_dim = DINO_EMBEDDING_DIM_SMALL
         elif dino_model in [PATCH_SIZE_B16_MODEL, PATCH_SIZE_B8_MODEL]:
             dino_embedding_dim = DINO_EMBEDDING_DIM_BASE
-        # dino_embedding_dim = 768
 
         self.fc1 = torch.nn.Linear(in_features=dino_embedding_dim, out_features=hidden_dim)
         self.fc2 = torch.nn.Linear(in_features=hidden_dim, out_features=num_classes)
