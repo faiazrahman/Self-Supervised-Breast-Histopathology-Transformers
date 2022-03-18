@@ -167,17 +167,7 @@ class InHouseDinoPretrainingModel(pl.LightningModule):
     def configure_optimizers(self):
         return FusedAdam(self.student.parameters(), lr=self.lr)
 
-class InHouseDinoWithIDCClassifierHeadModel(nn.Module):
-    """ IDC detection model using in-house DINO Vision Transformer """
-    pass
-
-class InHouseDinoIDCDetectionModel(pl.LightningModule):
-    """ PyTorch Lightning module for classification with in-house DINO ViT """
-    pass
-
 if __name__ == "__main__":
-    # train_loader, val_loader = setup_ssl_dataloaders()
-
     # Get pretraining datasets: training (transformed) and validation (original)
     # Note that the pretraining dataset is the one that is transformed
     full_dataset = DinoPretrainingBreastHistopathologyDataset()

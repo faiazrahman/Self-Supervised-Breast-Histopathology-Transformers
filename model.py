@@ -19,7 +19,6 @@ LEARNING_RATE = 1e-4
 DROPOUT_P = 0.1
 
 RESNET_OUT_DIM = 2048
-DINO_EMBEDDING_DIM = 384 # 384 for small, 768 for base # TODO rm
 DINO_EMBEDDING_DIM_SMALL = 384 # for dino-vits models
 DINO_EMBEDDING_DIM_BASE  = 768 # for dino-vitb models
 
@@ -27,7 +26,7 @@ PATCH_SIZE_S16_MODEL = 'facebook/dino-vits16'
 PATCH_SIZE_S8_MODEL = 'facebook/dino-vits8'
 PATCH_SIZE_B16_MODEL = 'facebook/dino-vitb16'
 PATCH_SIZE_B8_MODEL = 'facebook/dino-vitb8'
-DINO_MODEL = PATCH_SIZE_S16_MODEL
+DINO_MODEL = PATCH_SIZE_S8_MODEL
 
 losses = []
 
@@ -41,14 +40,16 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         self,
         num_classes,
         loss_fn,
-        # dino_embedding_dim,
         hidden_dim=512,
         dropout_p=0.1,
         dino_model=DINO_MODEL,
     ):
         super(SelfSupervisedDinoTransformerModel, self).__init__()
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
+        # NOTE: We run the feature extractor in the pl.LightningModule, i.e.
+        # this model receives the image pixel values (from the feature
+        # extractor) as input; alternatively, that could be done here by
+        # refactoring the pl.LightningModule and uncommenting the following
+        # self.feature_extractor = ViTFeatureExtractor.from_pretrained(dino_model)
         self.dino_model = ViTModel.from_pretrained(dino_model)
 
         dino_embedding_dim = None
@@ -84,7 +85,7 @@ class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
             # Cannot reassign self.hparams in pl.LightningModule; must use update()
             # https://github.com/PyTorchLightning/pytorch-lightning/discussions/7525
             self.hparams.update(hparams)
-            print(self.hparams)
+            logging.info(self.hparams)
 
         self.learning_rate = self.hparams.get("learning_rate", LEARNING_RATE)
 
@@ -93,10 +94,9 @@ class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
         self.model = SelfSupervisedDinoTransformerModel(
             num_classes=self.hparams.get("num_classes", NUM_CLASSES),
             loss_fn=torch.nn.CrossEntropyLoss(),
-            # dino_embedding_dim=DINO_EMBEDDING_DIM,
             dino_model=self.dino_model,
         )
-        print(self.dino_model)
+        logging.info(self.dino_model)
 
     # Required for pl.LightningModule
     def forward(self, image, label):
@@ -301,11 +301,3 @@ class PrintCallback(Callback):
         global losses
         for loss_val in losses:
             print(loss_val)
-
-class ConvolutionalNeuralNetModel(nn.Module):
-
-    def __init__(self):
-        pass
-
-    def forward(self, image, label):
-        pass

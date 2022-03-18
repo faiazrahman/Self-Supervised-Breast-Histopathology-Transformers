@@ -1,5 +1,5 @@
 """
-python run_training.py --model_type dino
+python run_training.py --model_type dino --dino_model_size base --dino_patch_size 8
 """
 
 import os
@@ -20,14 +20,15 @@ from model import ResNetIDCDetectionModel, SelfSupervisedDinoIDCDetectionModel, 
 
 # Multiprocessing for dataset batching
 # NUM_CPUS=40 on Yale Ziva server, NUM_CPUS=24 on Yale Tangra server
-# Set to 0 and comment out torch.multiprocessing line if multiprocessing gives errors
+# Set to 0 to turn off multiprocessing
 NUM_CPUS = 40
-# torch.multiprocessing.set_start_method('spawn')
 
 DATA_PATH = "./data"
-BATCH_SIZE = 32 # 32 | 64 | 128; 64 maximizes GPU utilization without exceeding CUDA memory
 NUM_CLASSES = 2
 DEFAULT_GPUS = list(range(torch.cuda.device_count()))
+BATCH_SIZE = 64 # 32 | 64 | 128; 64 is a good option to maximize GPU utilization without exceeding CUDA memory
+NUM_EPOCHS = 5
+LEARNING_RATE = 1e-4
 
 logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
 
@@ -60,9 +61,9 @@ if __name__ == "__main__":
     if not args.model_type: args.model_type = config.get("model_type", "dino")
     if not args.dino_model_size: args.dino_model_size = config.get("dino_model_size", "base")
     if not args.dino_patch_size: args.dino_patch_size = config.get("dino_patch_size", 8)
-    if not args.batch_size: args.batch_size = config.get("batch_size", 32)
-    if not args.learning_rate: args.learning_rate = config.get("learning_rate", 1e-4)
-    if not args.num_epochs: args.num_epochs = config.get("num_epochs", 5) # TODO FIXME 10?
+    if not args.batch_size: args.batch_size = config.get("batch_size", BATCH_SIZE)
+    if not args.learning_rate: args.learning_rate = config.get("learning_rate", LEARNING_RATE)
+    if not args.num_epochs: args.num_epochs = config.get("num_epochs", NUM_EPOCHS)
     if not args.dropout_p: args.dropout_p = config.get("dropout_p", 0.1)
     if args.gpus:
         args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
@@ -97,14 +98,14 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        batch_size=args.batch_size,
         num_workers=NUM_CPUS,
         drop_last=True
     )
     logging.info(train_loader)
 
     hparams = {
-        "num_classes": NUM_CLASSES, # TODO args.num_classes
+        "num_classes": NUM_CLASSES,
         "learning_rate": args.learning_rate
     }
 
@@ -147,10 +148,8 @@ if __name__ == "__main__":
         # Use all specified GPUs with data parallel strategy
         # https://pytorch-lightning.readthedocs.io/en/latest/advanced/multi_gpu.html#data-parallel
         trainer = pl.Trainer(
-            # gpus=1, # TODO args.gpus,
-            # gpus=list(range(torch.cuda.device_count())), # All available GPUs
-            gpus=[1,2],
-            strategy="dp", # TODO
+            gpus=args.gpus, # list(range(torch.cuda.device_count())), # All available GPUs
+            strategy="dp",
             callbacks=callbacks,
             enable_checkpointing=True,
             max_epochs=args.num_epochs

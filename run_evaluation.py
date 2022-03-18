@@ -107,7 +107,7 @@ if __name__ == "__main__":
     logging.info(test_loader)
 
     hparams = {
-        "num_classes": NUM_CLASSES, # TODO args.num_classes
+        "num_classes": NUM_CLASSES,
     }
 
     checkpoint_path = None
