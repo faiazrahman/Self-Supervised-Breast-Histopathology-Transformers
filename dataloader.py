@@ -25,8 +25,9 @@ PRESAVED_IMAGE_FILEPATHS = "image_filepaths.pkl"
 DINO_IMAGE_SIZE = 224
 
 PRETRAINING_IMAGE_SIZE = 256
+
 class BreastHistopathologyDataset(Dataset):
-    """ Dataset used by ResNetModel (and any other baseline models) """
+    """ Dataset used by ResNetModel (and any other baseline models) for IDC classification """
 
     def __init__(self, force_reset=False, image_dim=30):
 
@@ -101,7 +102,7 @@ class BreastHistopathologyDataset(Dataset):
         return item
 
 class DinoBreastHistopathologyDataset(Dataset):
-    """ Dataset used by DINO models """
+    """ Dataset used by DINO models for IDC classification """
 
     def __init__(self, force_reset=False):
 
