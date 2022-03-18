@@ -1,9 +1,5 @@
 """
 python run_training.py --model_type dino
-
-TODO This should pass the correct DINO model string to model.py
-during training (AND evaluation) or else you'll get errors
---> Export those to a separate file since you need them here, in eval, and in model
 """
 
 import os
@@ -29,7 +25,7 @@ NUM_CPUS = 40
 # torch.multiprocessing.set_start_method('spawn')
 
 DATA_PATH = "./data"
-BATCH_SIZE = 64 # 32 originally, 256 for greater GPU utilization
+BATCH_SIZE = 32 # 32 | 64 | 128; 64 maximizes GPU utilization without exceeding CUDA memory
 NUM_CLASSES = 2
 DEFAULT_GPUS = list(range(torch.cuda.device_count()))
 
@@ -47,6 +43,8 @@ if __name__ == "__main__":
     # This allows experiments defined in config files to be easily replicated
     # while tuning specific parameters via command-line args
     parser.add_argument("--model_type", type=str, default=None, help="dino | resnet")
+    parser.add_argument("--dino_model_size", type=str, default=None, help="base | small")
+    parser.add_argument("--dino_patch_size", type=int, default=None, help="8 | 16")
     parser.add_argument("--batch_size", type=int, default=None)
     parser.add_argument("--learning_rate", type=float, default=None)
     parser.add_argument("--num_epochs", type=int, default=None)
@@ -59,8 +57,9 @@ if __name__ == "__main__":
         with open(str(args.config), "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
 
-    if not args.model_type:
-        args.model_type = config.get("model_type", "resnet")
+    if not args.model_type: args.model_type = config.get("model_type", "dino")
+    if not args.dino_model_size: args.dino_model_size = config.get("dino_model_size", "base")
+    if not args.dino_patch_size: args.dino_patch_size = config.get("dino_patch_size", 8)
     if not args.batch_size: args.batch_size = config.get("batch_size", 32)
     if not args.learning_rate: args.learning_rate = config.get("learning_rate", 1e-4)
     if not args.num_epochs: args.num_epochs = config.get("num_epochs", 5) # TODO FIXME 10?
@@ -113,6 +112,19 @@ if __name__ == "__main__":
     if args.model_type == "resnet":
         model = ResNetIDCDetectionModel(hparams)
     elif args.model_type == "dino":
+        # Add the proper pretrained model checkpoint
+        dino_model = "facebook/dino-vit"
+        if args.dino_model_size == "small":
+            dino_model += "s"
+        elif args.dino_model_size == "base":
+            dino_model += "b"
+
+        if args.dino_patch_size == 8:
+            dino_model += "8"
+        elif args.dino_patch_size == 16:
+            dino_model += "16"
+        hparams["dino_model"] = dino_model
+
         model = SelfSupervisedDinoIDCDetectionModel(hparams)
     else:
         raise Exception("Given model_type is invalid")
@@ -137,7 +149,7 @@ if __name__ == "__main__":
         trainer = pl.Trainer(
             # gpus=1, # TODO args.gpus,
             # gpus=list(range(torch.cuda.device_count())), # All available GPUs
-            gpus=[3,7],
+            gpus=[1,2],
             strategy="dp", # TODO
             callbacks=callbacks,
             enable_checkpointing=True,

@@ -1,5 +1,6 @@
 """
-python run_evaluation.py --trained_model_version 66 --model_type dino
+python run_evaluation.py --trained_model_version 68 --model_type dino
+python run_evaluation.py --trained_model_version 69 --model_type resnet
 """
 
 import sys
@@ -65,8 +66,7 @@ if __name__ == "__main__":
         with open(str(args.config), "r") as yaml_file:
             config = yaml.safe_load(yaml_file)
 
-    if not args.model_type:
-        args.model_type = config.get("model_type", "resnet")
+    if not args.model_type: args.model_type = config.get("model_type", "resnet")
     if args.gpus:
         args.gpus = [int(gpu_num) for gpu_num in args.gpus.split(",")]
     else:
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         callbacks = [PrintCallback()]
         trainer = pl.Trainer(
             # gpus=args.gpus,
-            gpus=[3,7],
+            gpus=[3,4],
             strategy="dp",
             callbacks=callbacks,
         )
