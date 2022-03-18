@@ -21,6 +21,12 @@ DROPOUT_P = 0.1
 RESNET_OUT_DIM = 2048
 DINO_EMBEDDING_DIM = 384
 
+PATCH_SIZE_S16_MODEL = 'facebook/dino-vits16'
+PATCH_SIZE_S8_MODEL = 'facebook/dino-vits8'
+PATCH_SIZE_B16_MODEL = 'facebook/dino-vits16'
+PATCH_SIZE_B8_MODEL = 'facebook/dino-vits8'
+DINO_MODEL = PATCH_SIZE_B8_MODEL
+
 losses = []
 
 logging.basicConfig(level=logging.INFO) # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -40,7 +46,7 @@ class SelfSupervisedDinoTransformerModel(nn.Module):
         super(SelfSupervisedDinoTransformerModel, self).__init__()
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
-        self.dino_model = ViTModel.from_pretrained('facebook/dino-vits16')
+        self.dino_model = ViTModel.from_pretrained(DINO_MODEL)
 
         self.fc1 = torch.nn.Linear(in_features=dino_embedding_dim, out_features=hidden_dim)
         self.fc2 = torch.nn.Linear(in_features=hidden_dim, out_features=num_classes)
@@ -72,7 +78,7 @@ class SelfSupervisedDinoIDCDetectionModel(pl.LightningModule):
 
         self.learning_rate = self.hparams.get("learning_rate", LEARNING_RATE)
 
-        self.feature_extractor = ViTFeatureExtractor.from_pretrained('facebook/dino-vits16')
+        self.feature_extractor = ViTFeatureExtractor.from_pretrained(DINO_MODEL)
         self.model = SelfSupervisedDinoTransformerModel(
             num_classes=self.hparams.get("num_classes", NUM_CLASSES),
             loss_fn=torch.nn.CrossEntropyLoss(),

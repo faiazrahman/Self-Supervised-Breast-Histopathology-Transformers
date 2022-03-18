@@ -1,3 +1,7 @@
+"""
+python run_evaluation.py --trained_model_version 66 --model_type dino
+"""
+
 import sys
 import os
 from pathlib import Path
@@ -138,7 +142,7 @@ if __name__ == "__main__":
         callbacks = [PrintCallback()]
         trainer = pl.Trainer(
             # gpus=args.gpus,
-            gpus=[0,1,2,3],
+            gpus=[3,7],
             strategy="dp",
             callbacks=callbacks,
         )

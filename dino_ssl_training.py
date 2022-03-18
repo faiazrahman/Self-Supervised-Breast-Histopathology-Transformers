@@ -25,9 +25,8 @@ device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cp
 
 NUM_CPUS = 40 # 0 | 40
 
-# TRAIN_FILES = "data/"
 IMAGE_SIZE = 256
-PATCH_SIZE = 16 # 8 | 16 | 32
+PATCH_SIZE = 16 # 8 | 16
 ZERO_PCT = 0.1
 PATCHES_PER_ROW = (IMAGE_SIZE // PATCH_SIZE)
 NUM_PATCHES = PATCHES_PER_ROW ** 2
@@ -75,24 +74,11 @@ class CollateSingleImage(CollateFunction):
     def __call__(self, batch):
         return self.reshape(batch)
 
-# def setup_ssl_dataloaders():
-#     data_files = [str(file) for file in Path(TRAIN_FILES).glob("*.jpg")]
-#     train_files, val_files = sklearn.model_selection.train_test_split(
-#         data_files, test_size=0.15, random_state=6)
-
-#     train_data = TrainingImageData(train_files)
-#     val_data = OriginalImageData(val_files)
-
-#     train_loader = DataLoader(train_data, BATCH_SIZE, shuffle=True,
-#         drop_last=True, num_workers=NUM_WORKERS, pin_memory=True,
-#         collate_fn=CollateFunction())
-#     val_loader = DataLoader(val_data, BATCH_SIZE * 2, shuffle=False,
-#         drop_last=True, num_workers=NUM_WORKERS, pin_memory=True,
-#         collate_fn=CollateSingleImage())
-
-#     return train_loader, val_loader
-
 class InHouseDinoTransformerModel(nn.Module):
+    """
+    Vision Transformer for pretraining with DINO algorithm, which can then be
+    fitted with a classifier head for IDC classification
+    """
     def __init__(self, d_model, n_head, num_layers):
         super().__init__()
 
@@ -135,6 +121,8 @@ class HLoss:
         return -(t * log_s).sum(dim=1).mean()
 
 class InHouseDinoPretrainingModel(pl.LightningModule):
+    """ PyTorch Lightning module for pretraining ViT with DINO """
+
     def __init__(self, teacher, lr, loss_fn, dim, center_momentum,
         param_momentum):
         super().__init__()
@@ -179,6 +167,14 @@ class InHouseDinoPretrainingModel(pl.LightningModule):
     def configure_optimizers(self):
         return FusedAdam(self.student.parameters(), lr=self.lr)
 
+class InHouseDinoWithIDCClassifierHeadModel(nn.Module):
+    """ IDC detection model using in-house DINO Vision Transformer """
+    pass
+
+class InHouseDinoIDCDetectionModel(pl.LightningModule):
+    """ PyTorch Lightning module for classification with in-house DINO ViT """
+    pass
+
 if __name__ == "__main__":
     # train_loader, val_loader = setup_ssl_dataloaders()
 
@@ -207,7 +203,7 @@ if __name__ == "__main__":
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        batch_size=BATCH_SIZE,
         num_workers=NUM_CPUS,
         drop_last=True,
         collate_fn=CollateFunction()
@@ -234,18 +230,12 @@ if __name__ == "__main__":
 
     val_loader = DataLoader(
         val_dataset,
-        batch_size=BATCH_SIZE, # TODO args.batch_size,
+        batch_size=BATCH_SIZE,
         num_workers=NUM_CPUS,
         drop_last=True,
         collate_fn=CollateSingleImage()
     )
     logging.info(val_loader)
-
-    # # TODO: rm
-    # x, y = next(iter(train_loader))
-    # x2 = next(iter(val_loader))
-    # print(x, y)
-    # print(x2)
 
     teacher = InHouseDinoTransformerModel(NUM_PIXELS, TRANSFORMER_N_HEADS, TRANSFORMER_N_LAYERS)
     h_loss = HLoss(TEACHER_TEMPERATURE, STUDENT_TEMPERATURE)
