@@ -32,19 +32,3 @@ if __name__ == "__main__":
     logging.info(train_dataset)
     logging.info(f"Test dataset size: {len(test_dataset)}")
     logging.info(test_dataset)
-
-    # TODO: rm, this is just making sure the subsets are still iterable
-    # train_count = 0
-    # for batch_idx, batch_items in enumerate(train_dataset):
-    #     # print(batch_items)
-    #     # print(batch_items["image"])
-    #     train_count += 1
-    #     if train_count > 500:
-    #         break
-
-    # test_count = 0
-    # for batch_idx, batch_items in enumerate(test_dataset):
-    #     test_count += 1
-    #     if test_count > 500:
-    #         break
-    # print(train_count, test_count)

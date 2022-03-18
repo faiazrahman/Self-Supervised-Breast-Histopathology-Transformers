@@ -3,7 +3,6 @@ learning_rate: 1.0e-5 # (float) Note that the mantissa must have a decimal point
 num_epochs: 10 # (int)
 dropout_p: 0.1 # (float)
 gpus: [0, 1] # [0] | [1] | [0, 1] Note that it must be a list of ints
-num_cpus: 40
+num_cpus: 4
 trained_model_version: 1 # (int)
 trained_model_path: null # (str)
-# FIXME NOT WORKING PROPERLY
